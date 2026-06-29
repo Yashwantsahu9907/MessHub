@@ -44,8 +44,17 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const fetchUser = async () => {
+    try {
+      const userData = await authService.getMe();
+      setUser(userData);
+    } catch (error) {
+      console.error('Failed to load user', error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, fetchUser }}>
       {!loading && children}
     </AuthContext.Provider>
   );

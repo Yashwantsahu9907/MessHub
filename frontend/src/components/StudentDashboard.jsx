@@ -1,36 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import messService from '../services/messService';
 import { useAuth } from '../context/AuthContext';
-import { CheckCircle, Clock, CreditCard, Calendar, User, Bell } from 'lucide-react';
+import { CheckCircle, Clock, CreditCard, Calendar, User, Bell, Utensils } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-
-const mockAttendanceData = [
-  { name: 'Attended', value: 24, color: '#10B981' },
-  { name: 'Missed', value: 2, color: '#EF4444' },
-  { name: 'Upcoming', value: 4, color: '#E5E7EB' },
-];
+import QRScanner from './QRScanner';
 
 const StudentDashboard = () => {
-  const { user } = useAuth();
+  const { user, fetchUser } = useAuth();
   const [joinCode, setJoinCode] = useState('');
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
   const [activeMess, setActiveMess] = useState(null);
+  const [notifications, setNotifications] = useState([]);
   const [loadingMess, setLoadingMess] = useState(true);
+  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
-    const fetchActiveMess = async () => {
+    const fetchData = async () => {
       if (user?.activeMess) {
         try {
-          const mess = await messService.getStudentMess();
-          setActiveMess(mess);
+          const [messData, notifData] = await Promise.all([
+            messService.getStudentMess(),
+            messService.getNotifications()
+          ]);
+          setActiveMess(messData);
+          setNotifications(notifData);
         } catch (err) {
           console.error('No active mess or error fetching:', err);
         }
       }
       setLoadingMess(false);
     };
-    fetchActiveMess();
+    fetchData();
   }, [user]);
 
   const handleJoin = async (e) => {
@@ -51,11 +52,50 @@ const StudentDashboard = () => {
     }
   };
 
+  const handleScan = async (scannedCode) => {
+    setShowScanner(false);
+    setLoadingMess(true); // show loader while processing
+    
+    // The scanned code is a JSON string: {"action":"join_mess","code":"A1B2C3D4"}
+    let codeToSend = scannedCode;
+    try {
+      const parsed = JSON.parse(scannedCode);
+      if (parsed.code) codeToSend = parsed.code;
+    } catch (e) {
+      // Not JSON, just send the raw scanned code
+    }
+
+    try {
+      const data = await messService.markAttendance(codeToSend);
+      alert(`${data.message}! Meal: ${data.mealType}`);
+      // Refresh user to get updated meal balance
+      await fetchUser(); 
+      // Refresh notifications
+      const notifs = await messService.getNotifications();
+      setNotifications(notifs);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to mark attendance');
+    } finally {
+      setLoadingMess(false);
+    }
+  };
+
   if (loadingMess) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div></div>;
 
   if (activeMess) {
+    const mealBalance = user.mealBalance || 0;
+    
+    // Simple dynamic calculation for the pie chart
+    const totalMeals = 30; // Default month basis
+    const attended = totalMeals - mealBalance;
+    const mockAttendanceData = [
+      { name: 'Attended', value: attended > 0 ? attended : 1, color: '#10B981' },
+      { name: 'Remaining', value: mealBalance, color: '#E5E7EB' },
+    ];
+
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 relative">
+        {showScanner && <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
         
         {/* Top Status Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -69,9 +109,9 @@ const StudentDashboard = () => {
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Meals Remaining</p>
-              <h3 className="text-2xl font-bold text-gray-800">4</h3>
+              <h3 className="text-2xl font-bold text-gray-800">{mealBalance}</h3>
             </div>
-            <div className="bg-blue-50 p-3 rounded-full text-blue-600"><UtensilsIcon size={24} /></div>
+            <div className="bg-blue-50 p-3 rounded-full text-blue-600"><Utensils size={24} /></div>
           </div>
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
             <div>
@@ -99,7 +139,7 @@ const StudentDashboard = () => {
                 <h2 className="text-3xl font-bold mb-2">Welcome to {activeMess.name}</h2>
                 <p className="text-green-100 max-w-md">Your membership is fully active. Make sure to scan the QR code at the mess entrance for daily attendance.</p>
               </div>
-              <div className="mt-6 md:mt-0 bg-white/20 p-4 rounded-xl backdrop-blur-sm border border-white/30 text-center">
+              <div className="mt-6 md:mt-0 bg-white/20 p-4 rounded-xl backdrop-blur-sm border border-white/30 text-center shadow-inner">
                 <p className="text-sm uppercase tracking-wider font-bold text-green-100 mb-1">Today's Meal</p>
                 <p className="text-2xl font-bold">Lunch</p>
                 <p className="text-xs text-green-100 mt-1">12:30 PM - 2:30 PM</p>
@@ -121,7 +161,7 @@ const StudentDashboard = () => {
                 </ResponsiveContainer>
               </div>
               <div className="w-full md:w-1/2 space-y-4">
-                <h3 className="text-xl font-bold text-gray-800">Monthly Attendance</h3>
+                <h3 className="text-xl font-bold text-gray-800">Monthly Usage</h3>
                 <div className="space-y-3">
                   {mockAttendanceData.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between">
@@ -129,7 +169,7 @@ const StudentDashboard = () => {
                         <div className="w-3 h-3 rounded-full" style={{backgroundColor: item.color}}></div>
                         <span className="text-gray-600 font-medium">{item.name}</span>
                       </div>
-                      <span className="font-bold text-gray-800">{item.value} days</span>
+                      <span className="font-bold text-gray-800">{item.value} meals</span>
                     </div>
                   ))}
                 </div>
@@ -144,7 +184,10 @@ const StudentDashboard = () => {
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
               <h3 className="text-lg font-bold text-gray-800 mb-4">Quick Actions</h3>
               <div className="space-y-3">
-                <button className="w-full bg-green-50 text-green-700 hover:bg-green-100 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2">
+                <button 
+                  onClick={() => setShowScanner(true)}
+                  className="w-full bg-green-50 text-green-700 hover:bg-green-100 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2"
+                >
                   <CheckCircle size={18}/> Scan Attendance QR
                 </button>
                 <button className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2">
@@ -154,19 +197,22 @@ const StudentDashboard = () => {
             </div>
 
             {/* Notifications */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-96 flex flex-col">
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 shrink-0">
                 <Bell size={20} className="text-yellow-500"/> Notifications
               </h3>
-              <div className="space-y-4">
-                <div className="border-l-4 border-yellow-400 pl-3 py-1">
-                  <p className="text-sm font-bold text-gray-800">Special Dinner Tonight</p>
-                  <p className="text-xs text-gray-500 mt-1">Chicken Biryani & Paneer Butter Masala starting 7:30 PM.</p>
-                </div>
-                <div className="border-l-4 border-green-400 pl-3 py-1">
-                  <p className="text-sm font-bold text-gray-800">Payment Successful</p>
-                  <p className="text-xs text-gray-500 mt-1">Your payment for July was received.</p>
-                </div>
+              <div className="space-y-4 overflow-y-auto flex-1 pr-2">
+                {notifications.length === 0 ? (
+                   <p className="text-sm text-gray-500 italic">No recent notifications.</p>
+                ) : (
+                  notifications.map(notif => (
+                    <div key={notif._id} className={`border-l-4 pl-3 py-1 ${notif.type === 'success' ? 'border-green-400' : 'border-blue-400'}`}>
+                      <p className="text-sm font-bold text-gray-800">{notif.title}</p>
+                      <p className="text-xs text-gray-500 mt-1">{notif.message}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">{new Date(notif.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -218,10 +264,5 @@ const StudentDashboard = () => {
     </div>
   );
 };
-
-// Internal icon component for simple use
-const UtensilsIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={props.size} height={props.size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
-);
 
 export default StudentDashboard;

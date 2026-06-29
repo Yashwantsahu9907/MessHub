@@ -6,7 +6,9 @@ import {
   processJoinRequest,
   getMessMembers,
   removeMember,
-  getStudentMess
+  getStudentMess,
+  markAttendance,
+  getNotifications
 } from '../controllers/messController.js';
 import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
 
@@ -22,5 +24,7 @@ router.delete('/members/:studentId', protect, authorizeRoles('mess_owner'), remo
 // Student routes
 router.post('/join', protect, authorizeRoles('student'), requestJoin);
 router.get('/student/active', protect, authorizeRoles('student'), getStudentMess);
+router.post('/attendance', protect, authorizeRoles('student'), markAttendance);
+router.get('/notifications', protect, getNotifications);
 
 export default router;

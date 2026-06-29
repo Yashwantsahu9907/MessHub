@@ -35,6 +35,16 @@ const getStudentMess = async () => {
   return response.data;
 };
 
+const markAttendance = async (joinCode) => {
+  const response = await api.post('/mess/attendance', { joinCode });
+  return response.data;
+};
+
+const getNotifications = async () => {
+  const response = await api.get('/mess/notifications');
+  return response.data;
+};
+
 const messService = {
   getMessProfile,
   requestJoin,
@@ -43,6 +53,8 @@ const messService = {
   getMessMembers,
   removeMember,
   getStudentMess,
+  markAttendance,
+  getNotifications,
 };
 
 export default messService;

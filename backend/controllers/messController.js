@@ -2,6 +2,8 @@ import asyncHandler from 'express-async-handler';
 import Mess from '../models/Mess.js';
 import JoinRequest from '../models/JoinRequest.js';
 import User from '../models/User.js';
+import Attendance from '../models/Attendance.js';
+import Notification from '../models/Notification.js';
 
 // @desc    Get mess profile for owner
 // @route   GET /api/mess/profile
@@ -153,4 +155,101 @@ export const getStudentMess = asyncHandler(async (req, res) => {
   }
 
   res.status(200).json(student.activeMess);
+});
+
+// @desc    Mark attendance via QR code scan
+// @route   POST /api/mess/attendance
+// @access  Private/Student
+export const markAttendance = asyncHandler(async (req, res) => {
+  const { joinCode } = req.body;
+
+  if (!joinCode) {
+    res.status(400);
+    throw new Error('QR Code data (Join Code) is missing');
+  }
+
+  const student = await User.findById(req.user._id);
+
+  if (!student.activeMess) {
+    res.status(403);
+    throw new Error('You do not have an active mess membership');
+  }
+
+  const mess = await Mess.findOne({ joinCode: joinCode.toUpperCase() });
+
+  if (!mess || mess._id.toString() !== student.activeMess.toString()) {
+    res.status(403);
+    throw new Error('Invalid QR code for your active mess');
+  }
+
+  if (student.mealBalance <= 0) {
+    res.status(400);
+    throw new Error('No meal balance remaining. Please recharge your account.');
+  }
+
+  // Determine meal type based on current time (server local time / UTC adjusted if needed)
+  const now = new Date();
+  const hour = now.getHours(); // 0-23
+  let mealType = '';
+
+  if (hour >= 6 && hour <= 11) {
+    mealType = 'Breakfast';
+  } else if (hour >= 12 && hour <= 16) {
+    mealType = 'Lunch';
+  } else if (hour >= 18 && hour <= 23) {
+    mealType = 'Dinner';
+  } else {
+    res.status(400);
+    throw new Error('Attendance can only be marked during meal hours (Breakfast: 6-11, Lunch: 12-16, Dinner: 18-23)');
+  }
+
+  // Format date as YYYY-MM-DD
+  const dateStr = now.toISOString().split('T')[0];
+
+  // Check if attendance already exists
+  const existingAttendance = await Attendance.findOne({
+    student: student._id,
+    mess: mess._id,
+    date: dateStr,
+    mealType: mealType
+  });
+
+  if (existingAttendance) {
+    res.status(400);
+    throw new Error(`Attendance for ${mealType} today has already been marked.`);
+  }
+
+  // Create attendance
+  await Attendance.create({
+    student: student._id,
+    mess: mess._id,
+    date: dateStr,
+    mealType: mealType
+  });
+
+  // Deduct balance
+  student.mealBalance -= 1;
+  await student.save();
+
+  // Create notification
+  await Notification.create({
+    user: student._id,
+    title: 'Attendance Confirmed',
+    message: `Your attendance for ${mealType} at ${mess.name} has been recorded. 1 meal deducted. Remaining balance: ${student.mealBalance}.`,
+    type: 'success'
+  });
+
+  res.status(200).json({ 
+    message: 'Attendance marked successfully', 
+    mealType, 
+    remainingBalance: student.mealBalance 
+  });
+});
+
+// @desc    Get student notifications
+// @route   GET /api/mess/notifications
+// @access  Private
+export const getNotifications = asyncHandler(async (req, res) => {
+  const notifications = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(10);
+  res.status(200).json(notifications);
 });
