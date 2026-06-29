@@ -1,6 +1,8 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import OwnerDashboard from '../components/OwnerDashboard';
+import StudentDashboard from '../components/StudentDashboard';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -17,29 +19,31 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <header className="flex justify-between items-center mb-8 bg-white p-4 rounded-xl shadow">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex items-center gap-4">
-          <span className="font-medium">{user.email}</span>
-          <button onClick={handleLogout} className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition">
-            Logout
-          </button>
-        </div>
-      </header>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow">
-          <h3 className="text-xl font-bold mb-2">Attendance</h3>
-          <p className="text-gray-600">Scan QR to mark attendance.</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow">
-          <h3 className="text-xl font-bold mb-2">Billing</h3>
-          <p className="text-gray-600">View current month bills.</p>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow">
-          <h3 className="text-xl font-bold mb-2">Announcements</h3>
-          <p className="text-gray-600">Check latest mess updates.</p>
-        </div>
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        <header className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-xl shadow">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+            <p className="text-gray-500 capitalize">{user.role.replace('_', ' ')} Panel</p>
+          </div>
+          <div className="flex items-center gap-4 mt-4 md:mt-0">
+            <span className="font-medium bg-gray-100 px-4 py-2 rounded-full text-gray-700">
+              {user.name} ({user.email})
+            </span>
+            <button onClick={handleLogout} className="bg-red-500 text-white px-6 py-2 rounded-full hover:bg-red-600 transition font-medium shadow-sm">
+              Logout
+            </button>
+          </div>
+        </header>
+
+        {user.role === 'mess_owner' && <OwnerDashboard />}
+        {user.role === 'student' && <StudentDashboard />}
+        {user.role === 'super_admin' && (
+          <div className="bg-white p-8 rounded-xl shadow text-center">
+            <h2 className="text-2xl font-bold mb-4">Super Admin Dashboard</h2>
+            <p className="text-gray-600">Platform-wide statistics and management coming soon.</p>
+          </div>
+        )}
       </div>
     </div>
   );
