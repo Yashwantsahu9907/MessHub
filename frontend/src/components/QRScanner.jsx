@@ -21,7 +21,6 @@ const QRScanner = ({ onScan, onClose }) => {
 
     html5QrcodeScanner.render(
       (decodedText) => {
-        // Stop scanning after successful scan
         html5QrcodeScanner.clear().then(() => {
           onScan(decodedText);
         }).catch(err => {
@@ -30,8 +29,7 @@ const QRScanner = ({ onScan, onClose }) => {
         });
       },
       (errorMessage) => {
-        // Just hide the constant read errors unless it's critical
-        // setError(errorMessage);
+        // Suppress general frame read errors
       }
     );
 
@@ -45,22 +43,25 @@ const QRScanner = ({ onScan, onClose }) => {
   }, [onScan]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-            <Camera size={20} className="text-blue-500" />
+    <div className="fixed inset-0 z-[11000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col border border-gray-100 dark:border-gray-800 transition-colors duration-300 animate-scale-up">
+        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-950/50">
+          <h3 className="text-sm font-extrabold text-gray-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+            <Camera size={16} className="text-indigo-650" />
             Scan Attendance QR
           </h3>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition">
-            <X size={20} />
+          <button 
+            onClick={onClose} 
+            className="p-1 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition"
+          >
+            <X size={18} />
           </button>
         </div>
         
-        <div className="p-6">
-          {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
-          <div id="qr-reader" className="w-full overflow-hidden rounded-xl border-2 border-dashed border-gray-300"></div>
-          <p className="text-sm text-gray-500 text-center mt-4">
+        <div className="p-6 space-y-4">
+          {error && <p className="text-rose-500 text-xs text-center">{error}</p>}
+          <div id="qr-reader" className="w-full overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950"></div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center leading-relaxed">
             Point your camera at the Mess QR Code. It will be scanned automatically.
           </p>
         </div>
