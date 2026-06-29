@@ -31,12 +31,13 @@ export const loginUser = asyncHandler(async (req, res) => {
 // @route   GET /api/auth/me
 // @access  Private
 export const getMe = asyncHandler(async (req, res) => {
-  // req.user is set in protect middleware
+  // req.user is set in protect middleware, we can populate activeMess if needed
   const user = {
     _id: req.user._id,
     name: req.user.name,
     email: req.user.email,
     role: req.user.role,
+    activeMess: req.user.activeMess,
   };
   res.status(200).json(user);
 });
