@@ -1,37 +1,56 @@
 import React, { useState, useEffect } from 'react';
 import messService from '../services/messService';
 import { useAuth } from '../context/AuthContext';
-import { CheckCircle, Clock, CreditCard, Calendar, User, Bell, Utensils } from 'lucide-react';
+import { useSocket } from '../context/SocketContext';
+import { CheckCircle, Clock, CreditCard, Calendar, User, Bell, Utensils, Receipt } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import QRScanner from './QRScanner';
 
 const StudentDashboard = () => {
   const { user, fetchUser } = useAuth();
+  const { notifications } = useSocket();
   const [joinCode, setJoinCode] = useState('');
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
   const [activeMess, setActiveMess] = useState(null);
-  const [notifications, setNotifications] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [loadingMess, setLoadingMess] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (user?.activeMess) {
-        try {
-          const [messData, notifData] = await Promise.all([
-            messService.getStudentMess(),
-            messService.getNotifications()
-          ]);
-          setActiveMess(messData);
-          setNotifications(notifData);
-        } catch (err) {
-          console.error('No active mess or error fetching:', err);
-        }
-      }
-      setLoadingMess(false);
+    const initDashboard = async () => {
+      await fetchUser();
     };
-    fetchData();
+    initDashboard();
+  }, []);
+
+  const fetchPaymentsAndMess = async () => {
+    if (user?.activeMess) {
+      try {
+        const [messData, payData] = await Promise.all([
+          messService.getStudentMess(),
+          messService.getStudentPayments()
+        ]);
+        setActiveMess(messData);
+        setPayments(payData);
+      } catch (err) {
+        console.error('No active mess or error fetching:', err);
+      }
+    }
+    setLoadingMess(false);
+  };
+
+  useEffect(() => {
+    fetchPaymentsAndMess();
+  }, [user]);
+
+  useEffect(() => {
+    const handleNewNotification = () => {
+      fetchUser();
+      fetchPaymentsAndMess();
+    };
+    window.addEventListener('new_notification', handleNewNotification);
+    return () => window.removeEventListener('new_notification', handleNewNotification);
   }, [user]);
 
   const handleJoin = async (e) => {
@@ -54,25 +73,18 @@ const StudentDashboard = () => {
 
   const handleScan = async (scannedCode) => {
     setShowScanner(false);
-    setLoadingMess(true); // show loader while processing
+    setLoadingMess(true);
     
-    // The scanned code is a JSON string: {"action":"join_mess","code":"A1B2C3D4"}
     let codeToSend = scannedCode;
     try {
       const parsed = JSON.parse(scannedCode);
       if (parsed.code) codeToSend = parsed.code;
-    } catch (e) {
-      // Not JSON, just send the raw scanned code
-    }
+    } catch (e) {}
 
     try {
       const data = await messService.markAttendance(codeToSend);
       alert(`${data.message}! Meal: ${data.mealType}`);
-      // Refresh user to get updated meal balance
-      await fetchUser(); 
-      // Refresh notifications
-      const notifs = await messService.getNotifications();
-      setNotifications(notifs);
+      await fetchUser();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to mark attendance');
     } finally {
@@ -84,6 +96,9 @@ const StudentDashboard = () => {
 
   if (activeMess) {
     const mealBalance = user.mealBalance || 0;
+    const planExpiry = user.planExpiry ? new Date(user.planExpiry) : null;
+    const isExpired = planExpiry && planExpiry < new Date();
+    const hasPendingPayment = payments.some(p => p.status === 'pending');
     
     // Simple dynamic calculation for the pie chart
     const totalMeals = 30; // Default month basis
@@ -116,16 +131,16 @@ const StudentDashboard = () => {
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Payment Status</p>
-              <h3 className="text-xl font-bold text-gray-800">Paid</h3>
+              <h3 className={`text-xl font-bold ${hasPendingPayment ? 'text-orange-500' : 'text-gray-800'}`}>{hasPendingPayment ? 'Pending' : 'Paid'}</h3>
             </div>
-            <div className="bg-indigo-50 p-3 rounded-full text-indigo-600"><CreditCard size={24} /></div>
+            <div className={`${hasPendingPayment ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'} p-3 rounded-full`}><CreditCard size={24} /></div>
           </div>
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">Next Due Date</p>
-              <h3 className="text-xl font-bold text-gray-800">Aug 1st</h3>
+              <h3 className={`text-xl font-bold ${isExpired ? 'text-red-500' : 'text-gray-800'}`}>{planExpiry ? planExpiry.toLocaleDateString() : 'N/A'}</h3>
             </div>
-            <div className="bg-orange-50 p-3 rounded-full text-orange-600"><Calendar size={24} /></div>
+            <div className={`${isExpired ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'} p-3 rounded-full`}><Calendar size={24} /></div>
           </div>
         </div>
 
@@ -146,27 +161,58 @@ const StudentDashboard = () => {
               </div>
             </div>
 
-            {/* Attendance Chart */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-8">
-              <div className="w-full md:w-1/2 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={mockAttendanceData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                      {mockAttendanceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}}/>
-                  </PieChart>
-                </ResponsiveContainer>
+            {/* Payment History & Attendance Chart Container */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Payment History Widget */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Receipt size={20} className="text-indigo-500"/> Billing History</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto pr-2 space-y-3 max-h-64">
+                  {payments.length === 0 ? (
+                    <p className="text-gray-500 italic text-sm text-center py-8">No payment records found.</p>
+                  ) : (
+                    payments.map(pay => (
+                      <div key={pay._id} className="p-3 border border-gray-100 rounded-xl flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-gray-800 text-sm">{pay.plan?.name}</p>
+                          <p className="text-[10px] text-gray-500">{new Date(pay.createdAt).toLocaleDateString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-indigo-600 text-sm">₹{pay.amount}</p>
+                          {pay.status === 'pending' ? (
+                            <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold inline-block mt-1">Pending</span>
+                          ) : (
+                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold mt-1 inline-block">Paid</span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-              <div className="w-full md:w-1/2 space-y-4">
-                <h3 className="text-xl font-bold text-gray-800">Monthly Usage</h3>
-                <div className="space-y-3">
+
+              {/* Attendance Chart */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-bold text-gray-800 mb-4">Monthly Usage</h3>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={mockAttendanceData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                        {mockAttendanceData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}}/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="mt-4 space-y-2">
                   {mockAttendanceData.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
+                    <div key={idx} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{backgroundColor: item.color}}></div>
+                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></div>
                         <span className="text-gray-600 font-medium">{item.name}</span>
                       </div>
                       <span className="font-bold text-gray-800">{item.value} meals</span>
@@ -174,6 +220,7 @@ const StudentDashboard = () => {
                   ))}
                 </div>
               </div>
+
             </div>
           </div>
 

@@ -45,6 +45,46 @@ const getNotifications = async () => {
   return response.data;
 };
 
+const markNotificationRead = async (id) => {
+  const response = await api.put(`/mess/notifications/${id}/read`);
+  return response.data;
+};
+
+const markAllNotificationsRead = async () => {
+  const response = await api.put('/mess/notifications/read-all');
+  return response.data;
+};
+
+const getPlans = async () => {
+  const response = await api.get('/mess/plans');
+  return response.data;
+};
+
+const createPlan = async (planData) => {
+  const response = await api.post('/mess/plans', planData);
+  return response.data;
+};
+
+const assignPlan = async (studentId, planId) => {
+  const response = await api.post('/mess/payments/assign', { studentId, planId });
+  return response.data;
+};
+
+const getOwnerPayments = async () => {
+  const response = await api.get('/mess/payments');
+  return response.data;
+};
+
+const updatePaymentStatus = async (paymentId, status) => {
+  const response = await api.put(`/mess/payments/${paymentId}/status`, { status });
+  return response.data;
+};
+
+const getStudentPayments = async () => {
+  const response = await api.get('/mess/student/payments');
+  return response.data;
+};
+
 const messService = {
   getMessProfile,
   requestJoin,
@@ -55,6 +95,14 @@ const messService = {
   getStudentMess,
   markAttendance,
   getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  getPlans,
+  createPlan,
+  assignPlan,
+  getOwnerPayments,
+  updatePaymentStatus,
+  getStudentPayments,
 };
 
 export default messService;

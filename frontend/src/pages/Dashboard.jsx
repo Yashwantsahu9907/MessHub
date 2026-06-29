@@ -5,6 +5,7 @@ import OwnerDashboard from '../components/OwnerDashboard';
 import StudentDashboard from '../components/StudentDashboard';
 import SuperAdminDashboard from '../components/SuperAdminDashboard';
 import { LogOut, User as UserIcon } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -32,6 +33,7 @@ const Dashboard = () => {
             </p>
           </div>
           <div className="flex items-center gap-4 mt-6 md:mt-0">
+            <NotificationBell />
             <div className="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
               <div className="bg-gray-200 p-1.5 rounded-full"><UserIcon size={18} className="text-gray-600"/></div>
               <div className="flex flex-col">

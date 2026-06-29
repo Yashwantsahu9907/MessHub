@@ -39,6 +39,8 @@ export const getMe = asyncHandler(async (req, res) => {
     role: req.user.role,
     activeMess: req.user.activeMess,
     mealBalance: req.user.mealBalance,
+    activePlan: req.user.activePlan,
+    planExpiry: req.user.planExpiry,
   };
   res.status(200).json(user);
 });

@@ -4,6 +4,9 @@ import JoinRequest from '../models/JoinRequest.js';
 import User from '../models/User.js';
 import Attendance from '../models/Attendance.js';
 import Notification from '../models/Notification.js';
+import Plan from '../models/Plan.js';
+import Payment from '../models/Payment.js';
+import { sendNotification } from '../socket.js';
 
 // @desc    Get mess profile for owner
 // @route   GET /api/mess/profile
@@ -57,6 +60,14 @@ export const requestJoin = asyncHandler(async (req, res) => {
     status: 'pending'
   });
 
+  const notification = await Notification.create({
+    user: mess.owner,
+    title: 'New Join Request',
+    message: `${req.user.name} has requested to join your mess.`,
+    type: 'info'
+  });
+  sendNotification(mess.owner, notification);
+
   res.status(201).json({ message: 'Join request sent successfully', request: joinRequest });
 });
 
@@ -103,6 +114,14 @@ export const processJoinRequest = asyncHandler(async (req, res) => {
     const student = await User.findById(joinRequest.student._id);
     student.activeMess = mess._id;
     await student.save();
+
+    const notification = await Notification.create({
+      user: student._id,
+      title: 'Membership Approved',
+      message: `Your request to join ${mess.name} has been approved.`,
+      type: 'success'
+    });
+    sendNotification(student._id, notification);
   }
 
   res.status(200).json({ message: `Request ${status} successfully` });
@@ -232,12 +251,13 @@ export const markAttendance = asyncHandler(async (req, res) => {
   await student.save();
 
   // Create notification
-  await Notification.create({
+  const notification = await Notification.create({
     user: student._id,
     title: 'Attendance Confirmed',
     message: `Your attendance for ${mealType} at ${mess.name} has been recorded. 1 meal deducted. Remaining balance: ${student.mealBalance}.`,
     type: 'success'
   });
+  sendNotification(student._id, notification);
 
   res.status(200).json({ 
     message: 'Attendance marked successfully', 
@@ -250,6 +270,189 @@ export const markAttendance = asyncHandler(async (req, res) => {
 // @route   GET /api/mess/notifications
 // @access  Private
 export const getNotifications = asyncHandler(async (req, res) => {
-  const notifications = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(10);
-  res.status(200).json(notifications);
+  const notifications = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(20);
+  const unreadCount = await Notification.countDocuments({ user: req.user._id, isRead: false });
+  res.status(200).json({ notifications, unreadCount });
+});
+
+// @desc    Mark notification as read
+// @route   PUT /api/mess/notifications/:id/read
+// @access  Private
+export const markNotificationRead = asyncHandler(async (req, res) => {
+  const notification = await Notification.findById(req.params.id);
+  
+  if (!notification || notification.user.toString() !== req.user._id.toString()) {
+    res.status(404);
+    throw new Error('Notification not found');
+  }
+
+  notification.isRead = true;
+  await notification.save();
+
+  res.status(200).json({ message: 'Notification marked as read', notification });
+});
+
+// @desc    Mark all notifications as read
+// @route   PUT /api/mess/notifications/read-all
+// @access  Private
+export const markAllNotificationsRead = asyncHandler(async (req, res) => {
+  await Notification.updateMany(
+    { user: req.user._id, isRead: false },
+    { $set: { isRead: true } }
+  );
+
+  res.status(200).json({ message: 'All notifications marked as read' });
+});
+
+// @desc    Create a new meal plan
+// @route   POST /api/mess/plans
+// @access  Private/MessOwner
+export const createPlan = asyncHandler(async (req, res) => {
+  const { name, durationDays, mealsIncluded, price } = req.body;
+  const mess = await Mess.findOne({ owner: req.user._id });
+  if (!mess) {
+    res.status(404);
+    throw new Error('Mess not found');
+  }
+
+  const plan = await Plan.create({
+    mess: mess._id,
+    name,
+    durationDays,
+    mealsIncluded,
+    price
+  });
+
+  res.status(201).json(plan);
+});
+
+// @desc    Get all plans for a mess
+// @route   GET /api/mess/plans
+// @access  Private
+export const getPlans = asyncHandler(async (req, res) => {
+  let messId;
+  if (req.user.role === 'mess_owner') {
+    const mess = await Mess.findOne({ owner: req.user._id });
+    if (!mess) return res.status(200).json([]);
+    messId = mess._id;
+  } else {
+    messId = req.user.activeMess;
+    if (!messId) return res.status(200).json([]);
+  }
+
+  const plans = await Plan.find({ mess: messId, isActive: true });
+  res.status(200).json(plans);
+});
+
+// @desc    Assign a plan to a student (creates pending payment)
+// @route   POST /api/mess/payments/assign
+// @access  Private/MessOwner (can also be self-serve by student later)
+export const assignPlan = asyncHandler(async (req, res) => {
+  const { studentId, planId } = req.body;
+  
+  const mess = await Mess.findOne({ owner: req.user._id });
+  const student = await User.findById(studentId);
+  const plan = await Plan.findById(planId);
+
+  if (!mess || !student || !plan || student.activeMess.toString() !== mess._id.toString() || plan.mess.toString() !== mess._id.toString()) {
+    res.status(400);
+    throw new Error('Invalid assignment request');
+  }
+
+  // Create pending payment
+  const payment = await Payment.create({
+    student: student._id,
+    mess: mess._id,
+    plan: plan._id,
+    amount: plan.price,
+    status: 'pending'
+  });
+
+  const notification = await Notification.create({
+    user: student._id,
+    title: 'Payment Reminder',
+    message: `You have a pending payment of ₹${plan.price} for the ${plan.name} plan.`,
+    type: 'warning'
+  });
+  sendNotification(student._id, notification);
+
+  res.status(201).json({ message: 'Plan assigned, payment pending.', payment });
+});
+
+// @desc    Update payment status
+// @route   PUT /api/mess/payments/:id/status
+// @access  Private/MessOwner
+export const updatePaymentStatus = asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  const payment = await Payment.findById(req.params.id).populate('plan').populate('student');
+
+  if (!payment) {
+    res.status(404);
+    throw new Error('Payment not found');
+  }
+
+  const mess = await Mess.findOne({ owner: req.user._id });
+  if (payment.mess.toString() !== mess._id.toString()) {
+    res.status(403);
+    throw new Error('Not authorized');
+  }
+
+  payment.status = status;
+
+  if (status === 'paid' && !payment.paidAt) {
+    payment.paidAt = new Date();
+    payment.startDate = new Date();
+    
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + payment.plan.durationDays);
+    payment.expiryDate = expiry;
+
+    // Update student
+    const student = await User.findById(payment.student._id);
+    student.mealBalance += payment.plan.mealsIncluded;
+    student.activePlan = payment.plan._id;
+    student.planExpiry = expiry;
+    await student.save();
+
+    // Notify student
+    const notification = await Notification.create({
+      user: student._id,
+      title: 'Payment Received',
+      message: `Your payment of ₹${payment.amount} for ${payment.plan.name} is received. ${payment.plan.mealsIncluded} meals added!`,
+      type: 'success'
+    });
+    sendNotification(student._id, notification);
+  }
+
+  await payment.save();
+  res.status(200).json(payment);
+});
+
+// @desc    Get owner's payments
+// @route   GET /api/mess/payments
+// @access  Private/MessOwner
+export const getOwnerPayments = asyncHandler(async (req, res) => {
+  const mess = await Mess.findOne({ owner: req.user._id });
+  if (!mess) {
+    res.status(404);
+    throw new Error('Mess not found');
+  }
+
+  const payments = await Payment.find({ mess: mess._id })
+    .populate('student', 'name email')
+    .populate('plan', 'name')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json(payments);
+});
+
+// @desc    Get student's payments
+// @route   GET /api/mess/student/payments
+// @access  Private/Student
+export const getStudentPayments = asyncHandler(async (req, res) => {
+  const payments = await Payment.find({ student: req.user._id })
+    .populate('plan', 'name')
+    .sort({ createdAt: -1 });
+
+  res.status(200).json(payments);
 });

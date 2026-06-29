@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import messService from '../services/messService';
-import { Users, CheckCircle, Clock, CreditCard, Utensils, TrendingUp } from 'lucide-react';
+import { Users, CheckCircle, Clock, CreditCard, Utensils, TrendingUp, Plus, Receipt } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Mock data for visually rich UI as requested
@@ -18,20 +18,30 @@ const OwnerDashboard = () => {
   const [messProfile, setMessProfile] = useState(null);
   const [requests, setRequests] = useState([]);
   const [members, setMembers] = useState([]);
+  const [plans, setPlans] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Plan creation state
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [newPlan, setNewPlan] = useState({ name: '', durationDays: 30, mealsIncluded: 60, price: 3000 });
 
   const fetchData = async () => {
     try {
-      const [profileData, reqsData, memsData] = await Promise.all([
+      const [profileData, reqsData, memsData, plansData, payData] = await Promise.all([
         messService.getMessProfile(),
         messService.getJoinRequests(),
         messService.getMessMembers(),
+        messService.getPlans(),
+        messService.getOwnerPayments()
       ]);
       setMessProfile(profileData);
       setRequests(reqsData);
       setMembers(memsData);
+      setPlans(plansData);
+      setPayments(payData);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load dashboard data');
     } finally {
@@ -43,10 +53,18 @@ const OwnerDashboard = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const handleNewNotification = () => {
+      fetchData();
+    };
+    window.addEventListener('new_notification', handleNewNotification);
+    return () => window.removeEventListener('new_notification', handleNewNotification);
+  }, []);
+
   const handleProcessRequest = async (id, status) => {
     try {
       await messService.processJoinRequest(id, status);
-      fetchData(); // Refresh data
+      fetchData();
     } catch (err) {
       alert(err.response?.data?.message || 'Error processing request');
     }
@@ -56,9 +74,47 @@ const OwnerDashboard = () => {
     if (!window.confirm('Are you sure you want to remove this member?')) return;
     try {
       await messService.removeMember(studentId);
-      fetchData(); // Refresh data
+      fetchData();
     } catch (err) {
       alert(err.response?.data?.message || 'Error removing member');
+    }
+  };
+
+  const handleCreatePlan = async (e) => {
+    e.preventDefault();
+    try {
+      await messService.createPlan(newPlan);
+      setShowPlanForm(false);
+      setNewPlan({ name: '', durationDays: 30, mealsIncluded: 60, price: 3000 });
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error creating plan');
+    }
+  };
+
+  const handleAssignPlan = async (studentId) => {
+    if (plans.length === 0) return alert('Please create a plan first.');
+    const planId = window.prompt(`Enter Plan number to assign:\n${plans.map((p, i) => `${i + 1}. ${p.name} (₹${p.price})`).join('\n')}`);
+    if (!planId) return;
+    const selectedPlan = plans[parseInt(planId) - 1];
+    if (!selectedPlan) return alert('Invalid selection');
+    
+    try {
+      await messService.assignPlan(studentId, selectedPlan._id);
+      alert('Plan assigned! Payment is pending.');
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error assigning plan');
+    }
+  };
+
+  const handleMarkPaid = async (paymentId) => {
+    if (!window.confirm('Mark this payment as paid? This will add meals to the student account.')) return;
+    try {
+      await messService.updatePaymentStatus(paymentId, 'paid');
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error updating payment');
     }
   };
 
@@ -69,6 +125,8 @@ const OwnerDashboard = () => {
 
   if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div></div>;
   if (error) return <div className="text-red-500 text-center p-8">{error}</div>;
+
+  const pendingPayments = payments.filter(p => p.status === 'pending');
 
   return (
     <div className="space-y-6">
@@ -99,7 +157,7 @@ const OwnerDashboard = () => {
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-500">Pending Payments</p>
-            <h3 className="text-2xl font-bold text-gray-800">12</h3>
+            <h3 className="text-2xl font-bold text-gray-800">{pendingPayments.length}</h3>
           </div>
           <div className="bg-red-50 p-3 rounded-full text-red-600"><CreditCard size={24} /></div>
         </div>
@@ -142,11 +200,58 @@ const OwnerDashboard = () => {
               </ResponsiveContainer>
             </div>
           </div>
+          
+          {/* Plans Section */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Receipt size={20} className="text-green-500"/> Subscription Plans</h3>
+              <button onClick={() => setShowPlanForm(!showPlanForm)} className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-100 transition">
+                <Plus size={16} /> New Plan
+              </button>
+            </div>
+
+            {showPlanForm && (
+              <form onSubmit={handleCreatePlan} className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Plan Name</label>
+                  <input type="text" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" required placeholder="e.g. 30 Days Premium"/>
+                </div>
+                <div className="w-24">
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Days</label>
+                  <input type="number" value={newPlan.durationDays} onChange={e => setNewPlan({...newPlan, durationDays: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" required/>
+                </div>
+                <div className="w-24">
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Meals</label>
+                  <input type="number" value={newPlan.mealsIncluded} onChange={e => setNewPlan({...newPlan, mealsIncluded: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" required/>
+                </div>
+                <div className="w-32">
+                  <label className="block text-xs font-bold text-gray-500 mb-1">Price (₹)</label>
+                  <input type="number" value={newPlan.price} onChange={e => setNewPlan({...newPlan, price: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500" required/>
+                </div>
+                <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 transition">Save</button>
+              </form>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {plans.length === 0 ? (
+                <p className="text-gray-500 italic text-sm">No plans created yet.</p>
+              ) : (
+                plans.map(plan => (
+                  <div key={plan._id} className="border border-gray-100 p-4 rounded-xl shadow-sm">
+                    <h4 className="font-bold text-gray-800 text-lg">{plan.name}</h4>
+                    <p className="text-sm text-gray-500 mt-1">{plan.durationDays} Days • {plan.mealsIncluded} Meals</p>
+                    <p className="font-extrabold text-indigo-600 text-xl mt-2">₹{plan.price}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
         </div>
 
         {/* Right Column (Requests & Activity) */}
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-full max-h-[600px] flex flex-col">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-[300px] flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-gray-800">Pending Requests</h3>
               <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs font-bold">{requests.length}</span>
@@ -167,6 +272,35 @@ const OwnerDashboard = () => {
                       <button onClick={() => handleProcessRequest(req._id, 'rejected')} className="flex-1 bg-gray-100 text-gray-700 py-1.5 rounded-lg hover:bg-gray-200 text-xs font-medium transition">
                         Reject
                       </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          
+          {/* Recent Payments Widget */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-[380px] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-gray-800">Recent Payments</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+              {payments.length === 0 ? (
+                 <p className="text-gray-500 italic text-sm text-center py-8">No payment records.</p>
+              ) : (
+                payments.slice(0, 5).map(pay => (
+                  <div key={pay._id} className="p-3 border border-gray-100 rounded-xl flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-gray-800 text-sm">{pay.student?.name}</p>
+                      <p className="text-xs text-gray-500">{pay.plan?.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-indigo-600 text-sm">₹{pay.amount}</p>
+                      {pay.status === 'pending' ? (
+                        <button onClick={() => handleMarkPaid(pay._id)} className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold hover:bg-orange-200 mt-1">Mark Paid</button>
+                      ) : (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold mt-1 inline-block">Paid</span>
+                      )}
                     </div>
                   </div>
                 ))
@@ -202,8 +336,7 @@ const OwnerDashboard = () => {
                 <tr className="border-b border-gray-100">
                   <th className="pb-3 text-sm font-semibold text-gray-600">Student Name</th>
                   <th className="pb-3 text-sm font-semibold text-gray-600">Email</th>
-                  <th className="pb-3 text-sm font-semibold text-gray-600">Joined Date</th>
-                  <th className="pb-3 text-sm font-semibold text-gray-600">Status</th>
+                  <th className="pb-3 text-sm font-semibold text-gray-600">Balance</th>
                   <th className="pb-3 text-sm font-semibold text-gray-600 text-right">Actions</th>
                 </tr>
               </thead>
@@ -212,11 +345,11 @@ const OwnerDashboard = () => {
                   <tr key={member._id} className="border-b border-gray-50 hover:bg-gray-50/50 transition">
                     <td className="py-4 text-sm font-medium text-gray-800">{member.name}</td>
                     <td className="py-4 text-sm text-gray-500">{member.email}</td>
-                    <td className="py-4 text-sm text-gray-500">{new Date(member.createdAt).toLocaleDateString()}</td>
-                    <td className="py-4">
-                      <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">Active</span>
-                    </td>
-                    <td className="py-4 text-right">
+                    <td className="py-4 text-sm font-bold text-indigo-600">{member.mealBalance || 0} meals</td>
+                    <td className="py-4 text-right flex items-center justify-end gap-3">
+                      <button onClick={() => handleAssignPlan(member._id)} className="text-indigo-600 hover:text-indigo-800 text-sm font-medium transition flex items-center gap-1">
+                        <Plus size={14}/> Assign Plan
+                      </button>
                       <button onClick={() => handleRemoveMember(member._id)} className="text-red-500 hover:text-red-700 text-sm font-medium transition">
                         Remove
                       </button>

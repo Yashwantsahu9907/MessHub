@@ -27,7 +27,16 @@ const userSchema = new mongoose.Schema({
   },
   mealBalance: {
     type: Number,
-    default: 30, // Default to 30 meals
+    default: 0,
+  },
+  activePlan: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Plan',
+    default: null,
+  },
+  planExpiry: {
+    type: Date,
+    default: null,
   }
 }, {
   timestamps: true,
