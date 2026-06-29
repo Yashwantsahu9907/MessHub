@@ -85,6 +85,11 @@ const getStudentPayments = async () => {
   return response.data;
 };
 
+const getAnalytics = async (params) => {
+  const response = await api.get('/mess/analytics', { params });
+  return response.data;
+};
+
 const messService = {
   getMessProfile,
   requestJoin,
@@ -103,6 +108,7 @@ const messService = {
   getOwnerPayments,
   updatePaymentStatus,
   getStudentPayments,
+  getAnalytics,
 };
 
 export default messService;

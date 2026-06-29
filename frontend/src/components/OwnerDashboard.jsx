@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import messService from '../services/messService';
 import { Users, CheckCircle, Clock, CreditCard, Utensils, TrendingUp, Plus, Receipt } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import OwnerAnalytics from './OwnerAnalytics';
 
 // Mock data for visually rich UI as requested
 const mockAttendanceData = [
@@ -27,6 +28,7 @@ const OwnerDashboard = () => {
   // Plan creation state
   const [showPlanForm, setShowPlanForm] = useState(false);
   const [newPlan, setNewPlan] = useState({ name: '', durationDays: 30, mealsIncluded: 60, price: 3000 });
+  const [dashboardTab, setDashboardTab] = useState('overview'); // 'overview' | 'analytics'
 
   const fetchData = async () => {
     try {
@@ -130,8 +132,35 @@ const OwnerDashboard = () => {
 
   return (
     <div className="space-y-6">
-      
-      {/* Top Stat Cards */}
+      {/* Tab Navigation */}
+      <div className="flex border-b border-gray-100 bg-white p-2 rounded-2xl shadow-sm gap-2">
+        <button 
+          onClick={() => setDashboardTab('overview')}
+          className={`px-5 py-2.5 font-bold text-sm rounded-xl transition ${
+            dashboardTab === 'overview' 
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' 
+              : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+          }`}
+        >
+          Dashboard Overview
+        </button>
+        <button 
+          onClick={() => setDashboardTab('analytics')}
+          className={`px-5 py-2.5 font-bold text-sm rounded-xl transition ${
+            dashboardTab === 'analytics' 
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' 
+              : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'
+          }`}
+        >
+          Analytics & Reports
+        </button>
+      </div>
+
+      {dashboardTab === 'analytics' ? (
+        <OwnerAnalytics />
+      ) : (
+        <>
+          {/* Top Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
@@ -361,6 +390,8 @@ const OwnerDashboard = () => {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 };

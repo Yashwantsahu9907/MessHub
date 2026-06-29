@@ -16,7 +16,8 @@ import {
   assignPlan,
   updatePaymentStatus,
   getOwnerPayments,
-  getStudentPayments
+  getStudentPayments,
+  getAnalytics
 } from '../controllers/messController.js';
 import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
 
@@ -31,6 +32,7 @@ router.get('/requests', protect, authorizeRoles('mess_owner'), getJoinRequests);
 router.put('/requests/:id', protect, authorizeRoles('mess_owner'), processJoinRequest);
 router.get('/members', protect, authorizeRoles('mess_owner'), getMessMembers);
 router.delete('/members/:studentId', protect, authorizeRoles('mess_owner'), removeMember);
+router.get('/analytics', protect, authorizeRoles('mess_owner'), getAnalytics);
 
 // Owner Plans & Payments
 router.post('/plans', protect, authorizeRoles('mess_owner'), createPlan);

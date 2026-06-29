@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import Mess from '../models/Mess.js';
 import JoinRequest from '../models/JoinRequest.js';
 import User from '../models/User.js';
@@ -455,4 +456,189 @@ export const getStudentPayments = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 });
 
   res.status(200).json(payments);
+});
+
+// @desc    Get mess analytics for owners
+// @route   GET /api/mess/analytics
+// @access  Private/MessOwner
+export const getAnalytics = asyncHandler(async (req, res) => {
+  const { startDate, endDate, mealType, studentId } = req.query;
+
+  const mess = await Mess.findOne({ owner: req.user._id });
+  if (!mess) {
+    res.status(404);
+    throw new Error('Mess profile not found');
+  }
+
+  // 1. Attendance Filters
+  const attendanceFilter = { mess: mess._id };
+  if (startDate || endDate) {
+    attendanceFilter.date = {};
+    if (startDate) attendanceFilter.date.$gte = startDate;
+    if (endDate) attendanceFilter.date.$lte = endDate;
+  }
+  if (mealType) {
+    attendanceFilter.mealType = mealType;
+  }
+  if (studentId) {
+    attendanceFilter.student = new mongoose.Types.ObjectId(studentId);
+  }
+
+  // 2. Payments Filters
+  const paymentFilter = { mess: mess._id };
+  if (startDate || endDate) {
+    paymentFilter.createdAt = {};
+    if (startDate) paymentFilter.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      paymentFilter.createdAt.$lte = end;
+    }
+  }
+  if (studentId) {
+    paymentFilter.student = new mongoose.Types.ObjectId(studentId);
+  }
+
+  // 3. Join Requests Filters (for member growth)
+  const memberFilter = { mess: mess._id, status: 'approved' };
+  if (startDate || endDate) {
+    memberFilter.updatedAt = {};
+    if (startDate) memberFilter.updatedAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      memberFilter.updatedAt.$lte = end;
+    }
+  }
+
+  // Detailed Attendance Records (for tables and exports)
+  const detailedAttendance = await Attendance.find(attendanceFilter)
+    .populate('student', 'name email')
+    .sort({ date: -1, mealType: 1 });
+
+  // Detailed Payment Records (for tables and exports)
+  const detailedPayments = await Payment.find(paymentFilter)
+    .populate('student', 'name email')
+    .populate('plan', 'name price')
+    .sort({ createdAt: -1 });
+
+  // Member growth (Approved requests)
+  const approvedRequests = await JoinRequest.find(memberFilter)
+    .populate('student', 'name email')
+    .sort({ updatedAt: 1 });
+
+  // Summary Metrics
+  const activeMembersCount = await User.countDocuments({ activeMess: mess._id });
+  
+  const totalRevenue = detailedPayments
+    .filter(p => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amount, 0);
+
+  const pendingPaymentsCount = detailedPayments.filter(p => p.status === 'pending').length;
+  const totalAttendance = detailedAttendance.length;
+
+  // AGGREGATION: Attendance statistics by date and mealType
+  const matchPipeline = { mess: mess._id };
+  if (startDate || endDate) {
+    matchPipeline.date = {};
+    if (startDate) matchPipeline.date.$gte = startDate;
+    if (endDate) matchPipeline.date.$lte = endDate;
+  }
+  if (mealType) {
+    matchPipeline.mealType = mealType;
+  }
+  if (studentId) {
+    matchPipeline.student = new mongoose.Types.ObjectId(studentId);
+  }
+
+  const attendanceAgg = await Attendance.aggregate([
+    { $match: matchPipeline },
+    { $group: {
+        _id: { date: "$date", mealType: "$mealType" },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { "_id.date": 1 } }
+  ]);
+
+  // Transform attendance aggregation to a friendly format
+  const attendanceStatsMap = {};
+  attendanceAgg.forEach(item => {
+    const { date, mealType } = item._id;
+    if (!attendanceStatsMap[date]) {
+      attendanceStatsMap[date] = { date, Breakfast: 0, Lunch: 0, Dinner: 0, total: 0 };
+    }
+    attendanceStatsMap[date][mealType] = item.count;
+    attendanceStatsMap[date].total += item.count;
+  });
+  const attendanceStats = Object.values(attendanceStatsMap).sort((a, b) => a.date.localeCompare(b.date));
+
+  // Meal stats summary
+  const mealStats = { Breakfast: 0, Lunch: 0, Dinner: 0 };
+  detailedAttendance.forEach(att => {
+    if (mealStats[att.mealType] !== undefined) {
+      mealStats[att.mealType]++;
+    }
+  });
+
+  // AGGREGATION: Revenue statistics by date (paidAt)
+  const revenueMatch = {
+    mess: mess._id,
+    status: 'paid'
+  };
+  if (startDate || endDate) {
+    revenueMatch.paidAt = {};
+    if (startDate) revenueMatch.paidAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      revenueMatch.paidAt.$lte = end;
+    }
+  }
+  if (studentId) {
+    revenueMatch.student = new mongoose.Types.ObjectId(studentId);
+  }
+
+  const revenueAgg = await Payment.aggregate([
+    { $match: revenueMatch },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt" } },
+        amount: { $sum: "$amount" }
+      }
+    },
+    { $sort: { "_id": 1 } }
+  ]);
+
+  const revenueStats = revenueAgg.map(item => ({
+    date: item._id,
+    amount: item.amount
+  }));
+
+  // Member growth timeline (cumulative approved count)
+  let cumulativeCount = 0;
+  const memberGrowthStats = approvedRequests.map(req => {
+    cumulativeCount++;
+    const dateStr = req.updatedAt.toISOString().split('T')[0];
+    return {
+      date: dateStr,
+      count: cumulativeCount,
+      studentName: req.student?.name
+    };
+  });
+
+  res.status(200).json({
+    summary: {
+      totalRevenue,
+      totalAttendance,
+      activeMembersCount,
+      pendingPaymentsCount
+    },
+    attendanceStats,
+    mealStats,
+    revenueStats,
+    memberGrowthStats,
+    detailedAttendance,
+    detailedPayments
+  });
 });
