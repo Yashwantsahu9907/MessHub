@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import messService from '../services/messService';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
-import { CheckCircle, Clock, CreditCard, Calendar, User, Bell, Utensils, Receipt } from 'lucide-react';
+import { CheckCircle, Clock, CreditCard, Calendar, User, Bell, Utensils, Receipt, MessageSquare, AlertCircle } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import QRScanner from './QRScanner';
 
@@ -16,6 +16,9 @@ const StudentDashboard = () => {
   const [payments, setPayments] = useState([]);
   const [loadingMess, setLoadingMess] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
+  const [showComplaintModal, setShowComplaintModal] = useState(false);
+  const [complaintForm, setComplaintForm] = useState({ title: '', description: '' });
+  const [submittingComplaint, setSubmittingComplaint] = useState(false);
 
   useEffect(() => {
     const initDashboard = async () => {
@@ -89,6 +92,22 @@ const StudentDashboard = () => {
       alert(err.response?.data?.message || 'Failed to mark attendance');
     } finally {
       setLoadingMess(false);
+    }
+  };
+
+  const handleComplaintSubmit = async (e) => {
+    e.preventDefault();
+    if (!complaintForm.title || !complaintForm.description) return;
+    setSubmittingComplaint(true);
+    try {
+      await messService.submitComplaint(complaintForm);
+      alert('Complaint submitted successfully to Super Admin.');
+      setComplaintForm({ title: '', description: '' });
+      setShowComplaintModal(false);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to submit complaint');
+    } finally {
+      setSubmittingComplaint(false);
     }
   };
 
@@ -240,6 +259,12 @@ const StudentDashboard = () => {
                 <button className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2">
                   <CreditCard size={18}/> Make Payment
                 </button>
+                <button 
+                  onClick={() => setShowComplaintModal(true)}
+                  className="w-full bg-rose-50 text-rose-700 hover:bg-rose-100 py-3 rounded-xl font-medium transition flex items-center justify-center gap-2"
+                >
+                  <MessageSquare size={18}/> Raise Complaint
+                </button>
               </div>
             </div>
 
@@ -265,6 +290,61 @@ const StudentDashboard = () => {
 
           </div>
         </div>
+
+        {/* Complaint Modal */}
+        {showComplaintModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-6 rounded-2xl max-w-md w-full shadow-xl border border-gray-100 space-y-4">
+              <div className="flex items-center gap-2 text-rose-600 font-bold text-lg">
+                <AlertCircle size={22} />
+                <h3>Raise a Mess Complaint</h3>
+              </div>
+              <p className="text-xs text-gray-500">Your complaint will be forwarded to the Platform Super Admin for resolution.</p>
+              
+              <form onSubmit={handleComplaintSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Issue Title</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Unhygienic food quality"
+                    value={complaintForm.title}
+                    onChange={e => setComplaintForm({ ...complaintForm, title: e.target.value })}
+                    className="w-full px-3.5 py-2 border rounded-xl focus:ring-2 focus:ring-rose-500 text-sm focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Elaborate Details</label>
+                  <textarea
+                    placeholder="Describe your issue with dates or details..."
+                    value={complaintForm.description}
+                    onChange={e => setComplaintForm({ ...complaintForm, description: e.target.value })}
+                    className="w-full px-3.5 py-2 border rounded-xl focus:ring-2 focus:ring-rose-500 text-sm focus:outline-none"
+                    rows={4}
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-2 justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowComplaintModal(false)}
+                    className="px-4 py-2 border rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingComplaint}
+                    className="px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 transition"
+                  >
+                    {submittingComplaint ? 'Submitting...' : 'Submit Complaint'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

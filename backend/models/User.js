@@ -37,6 +37,10 @@ const userSchema = new mongoose.Schema({
   planExpiry: {
     type: Date,
     default: null,
+  },
+  isSuspended: {
+    type: Boolean,
+    default: false,
   }
 }, {
   timestamps: true,

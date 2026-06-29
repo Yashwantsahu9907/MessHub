@@ -18,6 +18,10 @@ const messSchema = new mongoose.Schema({
   qrCode: {
     type: String, // Data URI for the QR code image
     required: true,
+  },
+  isApproved: {
+    type: Boolean,
+    default: true,
   }
 }, {
   timestamps: true,

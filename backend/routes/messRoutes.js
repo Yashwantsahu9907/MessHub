@@ -17,7 +17,8 @@ import {
   updatePaymentStatus,
   getOwnerPayments,
   getStudentPayments,
-  getAnalytics
+  getAnalytics,
+  submitComplaint
 } from '../controllers/messController.js';
 import { protect, authorizeRoles } from '../middleware/authMiddleware.js';
 
@@ -48,5 +49,6 @@ router.get('/notifications', protect, getNotifications);
 router.put('/notifications/read-all', protect, markAllNotificationsRead);
 router.put('/notifications/:id/read', protect, markNotificationRead);
 router.get('/student/payments', protect, authorizeRoles('student'), getStudentPayments);
+router.post('/complaints', protect, authorizeRoles('student'), submitComplaint);
 
 export default router;

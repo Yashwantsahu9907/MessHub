@@ -11,6 +11,12 @@ export const protect = asyncHandler(async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key_here');
 
       req.user = await User.findById(decoded.id).select('-password');
+      
+      if (req.user && req.user.isSuspended) {
+        res.status(403);
+        throw new Error('Your account is suspended. Access denied.');
+      }
+
       next();
     } catch (error) {
       console.error(error);

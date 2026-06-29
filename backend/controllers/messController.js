@@ -7,6 +7,7 @@ import Attendance from '../models/Attendance.js';
 import Notification from '../models/Notification.js';
 import Plan from '../models/Plan.js';
 import Payment from '../models/Payment.js';
+import Complaint from '../models/Complaint.js';
 import { sendNotification } from '../socket.js';
 
 // @desc    Get mess profile for owner
@@ -640,5 +641,36 @@ export const getAnalytics = asyncHandler(async (req, res) => {
     memberGrowthStats,
     detailedAttendance,
     detailedPayments
+  });
+});
+
+// @desc    Submit a complaint
+// @route   POST /api/mess/complaints
+// @access  Private/Student
+export const submitComplaint = asyncHandler(async (req, res) => {
+  const { title, description } = req.body;
+
+  if (!title || !description) {
+    res.status(400);
+    throw new Error('Title and description are required');
+  }
+
+  const student = await User.findById(req.user._id);
+  if (!student.activeMess) {
+    res.status(400);
+    throw new Error('You must be a member of a mess to submit a complaint');
+  }
+
+  // Create the complaint
+  const complaint = await Complaint.create({
+    student: req.user._id,
+    mess: student.activeMess,
+    title,
+    description
+  });
+
+  res.status(201).json({
+    message: 'Complaint submitted successfully',
+    complaint
   });
 });

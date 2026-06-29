@@ -51,3 +51,8 @@ export const sendNotification = (userId, notification) => {
     io.to(socketId).emit('notification', notification);
   }
 };
+
+export const broadcastNotification = (notification) => {
+  if (!io) return;
+  io.emit('notification', notification);
+};

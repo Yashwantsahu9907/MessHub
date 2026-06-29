@@ -90,6 +90,11 @@ const getAnalytics = async (params) => {
   return response.data;
 };
 
+const submitComplaint = async (complaintData) => {
+  const response = await api.post('/mess/complaints', complaintData);
+  return response.data;
+};
+
 const messService = {
   getMessProfile,
   requestJoin,
@@ -109,6 +114,7 @@ const messService = {
   updatePaymentStatus,
   getStudentPayments,
   getAnalytics,
+  submitComplaint,
 };
 
 export default messService;
