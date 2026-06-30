@@ -13,14 +13,6 @@ import EmptyState from './EmptyState';
 import Pagination from './Pagination';
 import { SkeletonCard, SkeletonTable } from './Skeleton';
 
-const mockChartData = [
-  { name: 'Jan', users: 400, messes: 2 },
-  { name: 'Feb', users: 600, messes: 3 },
-  { name: 'Mar', users: 800, messes: 3 },
-  { name: 'Apr', users: 1200, messes: 4 },
-  { name: 'May', users: 1600, messes: 4 },
-  { name: 'Jun', users: 2100, messes: 5 },
-];
 
 const SuperAdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -306,7 +298,7 @@ const SuperAdminDashboard = () => {
             </div>
             <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={mockChartData} margin={{ left: -20 }}>
+                <AreaChart data={stats.growthStats} margin={{ left: -20 }}>
                   <defs>
                     <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>

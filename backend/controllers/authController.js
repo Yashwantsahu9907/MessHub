@@ -31,16 +31,18 @@ export const loginUser = asyncHandler(async (req, res) => {
 // @route   GET /api/auth/me
 // @access  Private
 export const getMe = asyncHandler(async (req, res) => {
-  // req.user is set in protect middleware, we can populate activeMess if needed
-  const user = {
-    _id: req.user._id,
-    name: req.user.name,
-    email: req.user.email,
-    role: req.user.role,
-    activeMess: req.user.activeMess,
-    mealBalance: req.user.mealBalance,
-    activePlan: req.user.activePlan,
-    planExpiry: req.user.planExpiry,
-  };
-  res.status(200).json(user);
+  const user = await import('../models/User.js').then(m => m.default).then(User => 
+    User.findById(req.user._id).populate('activePlan', 'name mealsIncluded durationDays')
+  );
+
+  res.status(200).json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    activeMess: user.activeMess,
+    mealBalance: user.mealBalance,
+    activePlan: user.activePlan,
+    planExpiry: user.planExpiry,
+  });
 });

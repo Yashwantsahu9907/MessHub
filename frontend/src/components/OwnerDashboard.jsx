@@ -10,15 +10,6 @@ import EmptyState from './EmptyState';
 import Pagination from './Pagination';
 import { SkeletonCard, SkeletonTable } from './Skeleton';
 
-const mockAttendanceData = [
-  { day: 'Mon', count: 45 },
-  { day: 'Tue', count: 52 },
-  { day: 'Wed', count: 49 },
-  { day: 'Thu', count: 60 },
-  { day: 'Fri', count: 55 },
-  { day: 'Sat', count: 30 },
-  { day: 'Sun', count: 20 },
-];
 
 const OwnerDashboard = () => {
   const [messProfile, setMessProfile] = useState(null);
@@ -26,6 +17,7 @@ const OwnerDashboard = () => {
   const [members, setMembers] = useState([]);
   const [plans, setPlans] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
   const { isDark } = useTheme();
@@ -47,18 +39,28 @@ const OwnerDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [profileData, reqsData, memsData, plansData, payData] = await Promise.all([
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - 7);
+      const params = {
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0]
+      };
+
+      const [profileData, reqsData, memsData, plansData, payData, analyticsData] = await Promise.all([
         messService.getMessProfile(),
         messService.getJoinRequests(),
         messService.getMessMembers(),
         messService.getPlans(),
-        messService.getOwnerPayments()
+        messService.getOwnerPayments(),
+        messService.getAnalytics(params)
       ]);
       setMessProfile(profileData);
       setRequests(reqsData);
       setMembers(memsData);
       setPlans(plansData);
       setPayments(payData);
+      setAnalytics(analyticsData);
     } catch (err) {
       console.error(err);
       addToast(err.response?.data?.message || 'Failed to load dashboard data', 'error');
@@ -200,6 +202,16 @@ const OwnerDashboard = () => {
 
   const pendingPayments = payments.filter(p => p.status === 'pending');
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todaysAttendance = analytics?.detailedAttendance?.filter(a => a.date === todayStr)?.length || 0;
+
+  // Format attendance for chart
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const chartData = analytics?.attendanceStats?.map(stat => ({
+    day: daysOfWeek[new Date(stat.date).getDay()],
+    count: stat.total
+  })) || [];
+
   return (
     <div className="space-y-6">
       {/* Tab Navigation */}
@@ -243,7 +255,7 @@ const OwnerDashboard = () => {
             <div className="bg-white dark:bg-gray-900 p-6 rounded-3xl border border-gray-100 dark:border-gray-850 shadow-sm flex items-center justify-between transition-colors">
               <div className="space-y-1">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Today's Attendance</p>
-                <h3 className="text-2xl font-black text-gray-800 dark:text-white">45</h3>
+                <h3 className="text-2xl font-black text-gray-800 dark:text-white">{todaysAttendance}</h3>
               </div>
               <div className="bg-emerald-50 dark:bg-emerald-950/40 p-3.5 rounded-2xl text-emerald-600 dark:text-emerald-400"><CheckCircle size={22} /></div>
             </div>
@@ -294,7 +306,7 @@ const OwnerDashboard = () => {
                 </div>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={mockAttendanceData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? '#1f2937' : '#f3f4f6'} />
                       <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fill: isDark ? '#9ca3af' : '#6b7280', fontSize: 11}} />
                       <YAxis axisLine={false} tickLine={false} tick={{fill: isDark ? '#9ca3af' : '#6b7280', fontSize: 11}} />

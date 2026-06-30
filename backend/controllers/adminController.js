@@ -28,6 +28,63 @@ export const getPlatformStats = asyncHandler(async (req, res) => {
   ]);
   const totalRevenue = revenueAggregation.length > 0 ? revenueAggregation[0].total : 0;
 
+  // Real growth stats for the last 6 months
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+
+  const usersGrowth = await User.aggregate([
+    { $match: { createdAt: { $gte: sixMonthsAgo } } },
+    {
+      $group: {
+        _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const messesGrowth = await Mess.aggregate([
+    { $match: { createdAt: { $gte: sixMonthsAgo } } },
+    {
+      $group: {
+        _id: { year: { $year: "$createdAt" }, month: { $month: "$createdAt" } },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  // Format into array for the chart
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const growthStats = [];
+
+  for (let i = 0; i < 6; i++) {
+    const targetDate = new Date();
+    targetDate.setMonth(targetDate.getMonth() - (5 - i));
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth() + 1; // 1-12
+
+    const uCount = usersGrowth.find(u => u._id.year === targetYear && u._id.month === targetMonth)?.count || 0;
+    const mCount = messesGrowth.find(m => m._id.year === targetYear && m._id.month === targetMonth)?.count || 0;
+
+    // We want cumulative count for the chart if possible, or just new counts.
+    // The previous mock was cumulative: [400, 600, 800, 1200, 1600, 2100]. Let's just do cumulative up to that month
+    
+    // To do true cumulative, we need to count all documents before that month too
+    const prevUsers = await User.countDocuments({
+      createdAt: { $lt: new Date(targetYear, targetMonth - 1, 1) }
+    });
+    const prevMesses = await Mess.countDocuments({
+      createdAt: { $lt: new Date(targetYear, targetMonth - 1, 1) }
+    });
+
+    growthStats.push({
+      name: months[targetMonth - 1],
+      users: prevUsers + uCount,
+      messes: prevMesses + mCount
+    });
+  }
+
   res.status(200).json({
     totalMesses,
     totalStudents,
@@ -36,7 +93,8 @@ export const getPlatformStats = asyncHandler(async (req, res) => {
     totalRevenue,
     totalAttendance,
     pendingComplaints,
-    totalComplaints
+    totalComplaints,
+    growthStats
   });
 });
 

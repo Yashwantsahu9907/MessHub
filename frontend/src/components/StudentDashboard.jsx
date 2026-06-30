@@ -159,10 +159,10 @@ const StudentDashboard = () => {
     const hasPendingPayment = payments.some(p => p.status === 'pending');
     
     // Pie Chart Data
-    const totalMeals = 30; // Default base limit
+    const totalMeals = user.activePlan ? user.activePlan.mealsIncluded : (mealBalance || 1); // Default to mealBalance if no plan to avoid negative chart
     const attended = Math.max(0, totalMeals - mealBalance);
     const mockPieData = [
-      { name: 'Attended', value: attended > 0 ? attended : 1, color: '#10B981' },
+      { name: 'Attended', value: attended, color: '#10B981' },
       { name: 'Remaining', value: mealBalance, color: isDark ? '#1f2937' : '#E5E7EB' },
     ];
 
