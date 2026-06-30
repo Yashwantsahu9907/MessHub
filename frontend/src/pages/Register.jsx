@@ -63,7 +63,7 @@ const Register = () => {
             <div className="relative">
               <input
                 type="text"
-                placeholder="John Doe"
+                placeholder="Enter your full name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 rounded-2xl focus:ring-2 focus:ring-indigo-500 text-sm focus:outline-none focus:bg-white dark:focus:bg-gray-900 transition-colors"
@@ -78,7 +78,7 @@ const Register = () => {
             <div className="relative">
               <input
                 type="email"
-                placeholder="you@example.com"
+                placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 rounded-2xl focus:ring-2 focus:ring-indigo-500 text-sm focus:outline-none focus:bg-white dark:focus:bg-gray-900 transition-colors"
@@ -108,7 +108,7 @@ const Register = () => {
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
-                placeholder="Min. 6 characters"
+                placeholder="Enter Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-10 py-3 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 rounded-2xl focus:ring-2 focus:ring-indigo-500 text-sm focus:outline-none focus:bg-white dark:focus:bg-gray-900 transition-colors"
