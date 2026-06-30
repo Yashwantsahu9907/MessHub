@@ -9,24 +9,34 @@ const seedSuperAdmin = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log('Connected to MongoDB');
 
-    const adminExists = await User.findOne({ email: 'admin@gmail.com' });
-    if (adminExists) {
-      adminExists.role = 'super_admin';
-      adminExists.isSuspended = false;
-      await adminExists.save();
-      console.log('Updated existing admin@gmail.com to super_admin role');
-      process.exit(0);
+    // DO NOT hardcode your password here if pushing to GitHub!
+    // Using environment variables instead for security.
+    const adminEmail = process.env.ADMIN_EMAIL; 
+    const adminPassword = process.env.ADMIN_PASSWORD ; 
+    const adminName = 'Super Admin';
+
+    let admin = await User.findOne({ email: adminEmail });
+
+    if (admin) {
+      // If admin exists, update the password and role
+      admin.password = adminPassword;
+      admin.role = 'super_admin';
+      admin.name = adminName;
+      admin.isSuspended = false;
+      await admin.save();
+      console.log(`Successfully updated existing admin (${adminEmail}) with new password!`);
+    } else {
+      // Create new admin if it doesn't exist
+      await User.create({
+        name: adminName,
+        email: adminEmail,
+        password: adminPassword,
+        role: 'super_admin',
+        isSuspended: false
+      });
+      console.log(`Super Admin ${adminEmail} created successfully!`);
     }
 
-    await User.create({
-      name: 'Super Admin',
-      email: 'admin@gmail.com',
-      password: '123456',
-      role: 'super_admin',
-      isSuspended: false
-    });
-
-    console.log('Super Admin admin@gmail.com seeded successfully with password 123456');
     process.exit(0);
   } catch (err) {
     console.error(err);
